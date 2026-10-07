@@ -122,6 +122,53 @@ fn brush_strokes_carry_auto_mask() {
     h.settle(SETTLE);
 }
 
+/// While brushing, another mask's pin still selects that mask (instead of painting a dab on it),
+/// and the overlay steps aside once an adjustment is made, until the mask is painted on again.
+#[test]
+fn brush_selects_pins_and_overlay_steps_aside() {
+    use lightcraft_pipeline::Overlay;
+    let mut h = detail("panel.masking");
+    let stroke = |h: &mut Headless, y: f64| {
+        pointer(
+            h,
+            json!([{"kind": "down", "x": 0.3, "y": y}, {"kind": "drag", "x": 0.4, "y": y}, {"kind": "drag", "x": 0.5, "y": y}, {"kind": "up", "x": 0.5, "y": y}]),
+        );
+    };
+    let strokes = |h: &Headless, mask: usize| match &develop(h).masks[mask].components[0].shape {
+        MaskShape::Brush { strokes } => strokes.len(),
+        s => panic!("{s:?}"),
+    };
+    exec(&mut h, "tool.brush", json!({}));
+    stroke(&mut h, 0.3);
+    exec(&mut h, "mask.add", json!({"kind": "brush"}));
+    exec(&mut h, "tool.brush", json!({}));
+    stroke(&mut h, 0.7);
+    let (first, second) = (develop(&h).masks[0].id, develop(&h).masks[1].id);
+    assert_eq!((h.app.session.active_mask, strokes(&h, 0), strokes(&h, 1)), (Some(second), 1, 1));
+    // clicking the first mask's pin selects it; nothing is painted
+    pointer(&mut h, json!([{"kind": "down", "x": 0.3, "y": 0.3}, {"kind": "up", "x": 0.3, "y": 0.3}]));
+    assert_eq!((h.app.session.active_mask, strokes(&h, 0), strokes(&h, 1)), (Some(first), 1, 1));
+    assert_eq!(h.app.ui.tool, "brush", "still brushing");
+    // its own pin is painted over
+    pointer(&mut h, json!([{"kind": "down", "x": 0.3, "y": 0.3}, {"kind": "up", "x": 0.3, "y": 0.3}]));
+    assert_eq!((h.app.session.active_mask, strokes(&h, 0)), (Some(first), 2));
+    // an adjustment hides the overlay…
+    let shown = |h: &Headless| crate::panels::detail::view_overlay(&h.app, &develop(h)) != Overlay::None;
+    assert!(shown(&h));
+    let r = h.request("ui.dragWidget", json!({"id": "slider:temp", "fx": 0.5, "fy": 0.5, "dx": 20.0}), T);
+    assert_eq!(r["ok"], true, "{r}");
+    assert_ne!(develop(&h).masks[0].adjust.temp, 0.0);
+    assert!(!shown(&h), "the edit is visible");
+    // …O brings it back (one press), and so does painting
+    h.request("ui.key", json!({"key": "o"}), T);
+    assert!(shown(&h) && h.app.ui.mask_overlay);
+    h.app.ui.mask_overlay_hidden = Some(first);
+    assert!(!shown(&h));
+    stroke(&mut h, 0.5);
+    assert!(shown(&h));
+    h.settle(SETTLE);
+}
+
 #[test]
 fn remove_spots_by_pointer_and_keyboard() {
     let mut h = detail("panel.remove");

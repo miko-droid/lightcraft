@@ -125,9 +125,9 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(crate::i18n::tr("Masks")).font(t.semibold(13.0)).color(t.text_label));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let on = app.ui.mask_overlay;
+                let on = app.ui.mask_overlay && (app.ui.mask_overlay_hidden.is_none() || app.ui.mask_overlay_hidden != app.session.active_mask);
                 if icon_button(ui, "maskOverlay", Icon::Eye, vec2(24.0, 24.0), on, true, "Show overlay (O)").clicked() {
-                    app.ui.mask_overlay = !on;
+                    let _ = app.run("view.maskOverlay", json!({}));
                 }
             });
         });
@@ -287,6 +287,10 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     for s in LOCAL {
         let v = local_get(&m.adjust, s.id);
         let out = slider(ui, s, v, true, None);
+        // the overlay steps aside so the adjustment can be seen
+        if out.value.is_some() || out.drag_started {
+            app.ui.mask_overlay_hidden = Some(mid);
+        }
         apply_slider_out(app, s, out, |app, v| app.run("mask.adjust", json!({"values": {s.id: v}})));
     }
     let amt = ControlSpec {

@@ -492,7 +492,9 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             Ok(Value::Null)
         }
         "view.maskOverlay" => {
-            app.ui.mask_overlay = p.get("show").and_then(Value::as_bool).unwrap_or(!app.ui.mask_overlay);
+            // an overlay that stepped aside after an adjustment counts as off: O brings it back
+            let aside = app.ui.mask_overlay_hidden.take().is_some_and(|id| Some(id) == app.session.active_mask);
+            app.ui.mask_overlay = p.get("show").and_then(Value::as_bool).unwrap_or(aside || !app.ui.mask_overlay);
             Ok(json!({"maskOverlay": app.ui.mask_overlay}))
         }
         "view.maskOverlayMode" => {

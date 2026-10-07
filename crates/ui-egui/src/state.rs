@@ -250,6 +250,13 @@ pub struct UiState {
     pub mask_overlay_color: [u8; 3],
     pub mask_overlay_opacity: f32,
     pub mask_pins: bool,
+    /// The mask whose overlay stepped aside when one of its adjustments was changed, so the edit
+    /// can be seen. It comes back while painting, over the mask's pin, with O, or with another mask.
+    #[serde(skip)]
+    pub mask_overlay_hidden: Option<u32>,
+    /// The pointer is over the selected mask's pin (set by the loupe each frame).
+    #[serde(skip)]
+    pub mask_pin_hover: bool,
     /// The overlay (on, mode) to go back to when Show Luminance Map is turned off.
     #[serde(skip)]
     pub luminance_map_restore: Option<(bool, String)>,
@@ -543,6 +550,8 @@ impl Default for UiState {
             mask_overlay_color: [230, 30, 40],
             mask_overlay_opacity: 50.0,
             mask_pins: true,
+            mask_overlay_hidden: None,
+            mask_pin_hover: false,
             crop_overlay: CropOverlay::Thirds,
             crop_overlay_orient: 0,
             show_filenames: true,

@@ -9,6 +9,12 @@
   with a counterpart here come along, the rest is listed.
 - 23 new built-in presets: Portrait, Landscape, Urban, Food, Seasons, Vintage and B&W toners.
 
+### Masking
+- While brushing, clicking another mask's pin selects that mask instead of painting on top of it, and a stroke
+  starts where the pointer was pressed.
+- The mask overlay steps aside as soon as you move one of the mask's adjustment sliders, so the edit is visible. It
+  comes back while you paint, when the pointer is over the mask's pin, or with O.
+
 ### Reliability
 - LightCraft no longer crashes at launch on Windows PCs whose Vulkan driver is broken (issue #136, e.g. some Intel UHD
   630 drivers): on Windows the window and GPU rendering use DirectX 12 only and never load the Vulkan driver unless

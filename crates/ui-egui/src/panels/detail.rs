@@ -537,6 +537,8 @@ pub(crate) fn view_overlay(app: &LightcraftApp, d: &DevelopSettings) -> lightcra
         && app.ui.mask_overlay
         && let Some(m) = app.session.active_mask.and_then(|id| d.masks.iter().find(|m| m.id == id))
         && !m.components.is_empty()
+        // stepped aside after an adjustment, unless the pointer asks for it again
+        && (app.ui.mask_overlay_hidden != Some(m.id) || app.ui.mask_pin_hover || matches!(app.gesture, Some(Gesture::Brush { .. })))
     {
         return Overlay::Mask {
             id: m.id.min(u16::MAX as u32) as u16,
@@ -941,8 +943,29 @@ fn mask_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Respons
             }
         }
     }
+    // the grip under the pointer: the selected mask's first, then the nearest
+    let hit = |q: Pos2| {
+        grips
+            .iter()
+            .filter(|g| g.3.distance(q) < 10.0)
+            .min_by(|a, b| {
+                (Some(a.0) != active, a.3.distance(q)).partial_cmp(&(Some(b.0) != active, b.3.distance(q))).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .copied()
+    };
+    app.ui.mask_pin_hover = resp.hover_pos().and_then(hit).is_some_and(|g| Some(g.0) == active && g.2 == 0);
+    // while brushing, another mask's pin is still a pin (click selects it, drag moves it); the
+    // selected mask's own pin is painted over
+    let on_pin = match &app.gesture {
+        Some(Gesture::MaskHandle { .. }) => true,
+        Some(Gesture::Brush { .. }) => false,
+        _ => {
+            let at = ui.input(|i| i.pointer.press_origin()).or(resp.interact_pointer_pos()).or(resp.hover_pos());
+            at.and_then(hit).is_some_and(|g| Some(g.0) != active)
+        }
+    };
     // brush tool
-    if app.ui.tool == "brush" {
+    if app.ui.tool == "brush" && !on_pin {
         let r = (app.ui.brush_size as f64 * long) as f32;
         if let Some(h) = resp.hover_pos() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::None);
@@ -955,7 +978,15 @@ fn mask_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Respons
             let n = map.norm(q);
             match &mut app.gesture {
                 Some(Gesture::Brush { points }) => points.push(n),
-                _ => app.gesture = Some(Gesture::Brush { points: vec![n] }),
+                _ => {
+                    // painting shows the mask again
+                    app.ui.mask_overlay_hidden = None;
+                    // a drag is only recognised after some movement: the stroke starts at the press
+                    let mut points: Vec<Point> =
+                        ui.input(|i| i.pointer.press_origin()).filter(|o| *o != q).map(|o| map.norm(o)).into_iter().collect();
+                    points.push(n);
+                    app.gesture = Some(Gesture::Brush { points });
+                }
             }
         }
         // the stroke being painted (the render shows it once it's committed)
@@ -978,16 +1009,6 @@ fn mask_overlay(app: &mut LightcraftApp, ui: &mut egui::Ui, resp: &egui::Respons
         }
         return;
     }
-    // the grip under the pointer: the selected mask's first, then the nearest
-    let hit = |q: Pos2| {
-        grips
-            .iter()
-            .filter(|g| g.3.distance(q) < 10.0)
-            .min_by(|a, b| {
-                (Some(a.0) != active, a.3.distance(q)).partial_cmp(&(Some(b.0) != active, b.3.distance(q))).unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .copied()
-    };
     if resp.clicked()
         && let Some(q) = resp.interact_pointer_pos()
         && let Some((mid, ..)) = hit(q)
