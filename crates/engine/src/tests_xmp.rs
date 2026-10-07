@@ -117,6 +117,36 @@ fn auto_write_and_naming_preference() {
     let _ = std::fs::remove_dir_all(&lib);
 }
 
+/// Local photos are edited in their folders: with auto-write off their sidecar is still written
+/// after every change, and browsing the folder from another library brings the edits back.
+#[test]
+fn local_photos_always_write_their_sidecar() {
+    let src = temp_dir("local");
+    let lib = temp_dir("local-lib");
+    write_png(&src.join("a.png"), 3);
+    let sidecar = src.join("a.xmp");
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.browse", &json!({"path": src.to_string_lossy()})).unwrap();
+    assert!(!s.xmp.auto_write);
+    assert!(!sidecar.exists(), "browsing writes nothing");
+    let id = only(&s);
+    assert!(s.catalog.photo(id).unwrap().local);
+    s.execute("library.select", &json!({"ids": [id.0]})).unwrap();
+    s.execute("photo.rate", &json!({"rating": 3})).unwrap();
+    s.execute("develop.set", &json!({"control": "light.exposure", "value": 0.5})).unwrap();
+    assert!(std::fs::read_to_string(&sidecar).unwrap().contains("<xmp:Rating>3</xmp:Rating>"));
+    drop(s);
+    let _ = std::fs::remove_dir_all(&lib);
+    let mut s = Session::new().with_fs();
+    s.open_library(&lib, false).unwrap();
+    s.execute("library.browse", &json!({"path": src.to_string_lossy()})).unwrap();
+    let p = s.catalog.photo(only(&s)).unwrap();
+    assert_eq!((p.rating, p.develop.light.exposure), (3, 0.5));
+    let _ = std::fs::remove_dir_all(&src);
+    let _ = std::fs::remove_dir_all(&lib);
+}
+
 /// Hand-written sidecar in the style other raw developers use (attribute form, `crs:` fields).
 const FOREIGN: &str = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">

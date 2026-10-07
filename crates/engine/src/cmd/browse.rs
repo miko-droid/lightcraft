@@ -1,6 +1,7 @@
 //! Local: browse a folder on disk without adding it to the library (Lightroom's Local tab).
 //! The folder's photos are probed in place as `local` photos — only folder views list them —
-//! and edits go to the files' XMP sidecars like any photo added in place. "Add to My Photos"
+//! and every edit is written to the file's XMP sidecar (whatever the auto-write preference says:
+//! `Session::auto_write_sidecars`). "Add to My Photos"
 //! makes them ordinary library photos.
 //!
 //! Each browse records when the folders it listed were browsed. Untouched records of folders

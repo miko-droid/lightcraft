@@ -2,6 +2,13 @@
 
 ## October 2026
 
+### Local folders
+- Photos browsed in Local keep their edits next to the files: ratings, flags, labels, metadata and develop settings
+  are written to the photo's XMP sidecar after every change, whether or not "Automatically Write Changes into XMP"
+  is on. Browsing alone writes nothing.
+- On Windows, a file imported as `C:/photos/a.jpg` and later found as `C:\photos\a.jpg` is recognised as the same
+  path.
+
 ### Presets and profiles
 - Import presets from other editors: XMP presets, classic `.lrtemplate` files, "DNG presets" from mobile apps and `.zip`
   bundles of any of these — whole folders at once, grouped by pack. Masks inside presets come along.

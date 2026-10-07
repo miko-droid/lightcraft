@@ -485,18 +485,20 @@ impl Session {
         Ok(Some((Op::Batch { ops }, from)))
     }
 
-    /// Auto-write: sidecars for photos changed by `ops` (errors are logged, not returned).
+    /// Auto-write: sidecars for photos changed by `ops` (errors are logged, not returned). With
+    /// [`XmpPrefs::auto_write`] off, only Local photos are written: they are browsed in their
+    /// folders, not kept in the library, so their edits live next to the files.
     pub(crate) fn auto_write_sidecars(&self, ops: &[Op]) {
         let mut ids = Vec::new();
         ops.iter().for_each(|o| op_photos(o, &mut ids));
+        let all = self.xmp.auto_write;
+        ids.retain(|id| self.catalog.photo(*id).is_some_and(|p| (all || p.local) && file_path(p).is_some() && p.copy_of.is_none()));
         if ids.is_empty() {
             return;
         }
         let owners = StemOwners::of(&self.catalog);
         for id in ids {
-            if self.catalog.photo(id).is_some_and(|p| file_path(p).is_some() && p.copy_of.is_none())
-                && let Err(e) = self.save_sidecar_with(id, &owners)
-            {
+            if let Err(e) = self.save_sidecar_with(id, &owners) {
                 log::warn!("auto-write XMP: {e}");
             }
         }

@@ -307,7 +307,12 @@ pub fn expand(paths: &[String], skip: Option<&Path>) -> Vec<String> {
     }
     let mut out = Vec::new();
     for p in paths {
-        walk(Path::new(p), skip, &mut out, true);
+        // one spelling per file on disk: `C:/a/b.jpg` and `C:\a\b.jpg` are the same photo (the
+        // walk below lists with the platform's separator). Paths that aren't on disk (a host's
+        // own store, as on the web) are keys and stay as given.
+        let p = Path::new(p);
+        let p = if p.exists() { p.components().collect() } else { p.to_path_buf() };
+        walk(&p, skip, &mut out, true);
     }
     let mut seen = std::collections::HashSet::new();
     out.retain(|p| seen.insert(p.clone()));

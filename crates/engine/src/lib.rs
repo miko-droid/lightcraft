@@ -308,7 +308,8 @@ impl Session {
                 self.journal.drain(..1000);
             }
         }
-        if r.is_ok() && self.depth == 0 && self.xmp.auto_write && self.interaction.is_none() && self.pending_log.len() > log_start {
+        // (auto-write off still writes the sidecars of Local photos: `auto_write_sidecars`)
+        if r.is_ok() && self.depth == 0 && self.interaction.is_none() && self.pending_log.len() > log_start {
             self.auto_write_sidecars(&self.pending_log[log_start..]);
         }
         if self.depth == 0 && self.library.is_some() {
