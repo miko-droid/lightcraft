@@ -365,16 +365,20 @@ fn local_folder_tree_expands_and_browses() {
     std::fs::create_dir_all(base.join("Trip/Day 1")).unwrap();
     std::fs::create_dir_all(base.join(".hidden")).unwrap();
     let mut h = detail("panel.edit");
+    h.hide_home_over(&base);
     exec(&mut h, "view.leftPanel", json!({"show": true}));
     exec(&mut h, "library.browse", json!({"path": base.to_string_lossy()}));
     h.settle(SETTLE);
     let base_s = base.to_string_lossy().to_string();
     let r = h.request("ui.clickWidget", json!({"id": format!("folderToggle:{base_s}")}), T);
     assert_eq!(r["ok"], true, "{r}");
-    for _ in 0..3 {
-        h.step();
-    }
     let trip = base.join("Trip").to_string_lossy().to_string();
+    // the subfolders are listed on a worker thread: wait for them
+    let listed = std::time::Instant::now();
+    while listed.elapsed() < T && !h.app.widgets.iter().any(|(w, _)| *w == format!("source:local:{trip}")) {
+        h.step();
+        std::thread::sleep(Duration::from_millis(5));
+    }
     let r = h.request("ui.clickWidget", json!({"id": format!("source:local:{trip}")}), T);
     assert_eq!(r["ok"], true, "the subfolder is listed: {r}");
     assert_eq!(h.app.session.browse.as_ref().map(|b| b.path.clone()), Some(trip.clone()), "clicking it browses it");

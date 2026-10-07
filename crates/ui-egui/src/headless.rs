@@ -246,6 +246,19 @@ impl Headless {
 }
 
 #[cfg(test)]
+impl Headless {
+    /// Take the home folder out of Local when `path` lies in it. Tests browse temp folders and
+    /// expect them as Local roots of their own; where the temp folder is inside the home folder
+    /// (Windows), it would show deep inside Home's tree instead.
+    pub(crate) fn hide_home_over(&mut self, path: &std::path::Path) {
+        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap_or_default();
+        if !home.is_empty() && lightcraft_catalog::query::folder_within(&path.to_string_lossy(), &home) {
+            self.app.ui.hidden_locations.push(home);
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -825,11 +838,14 @@ mod tests {
             let w = h.request("ui.widgets", json!({"filter": "source:local:"}), t);
             w["result"].as_array().unwrap().iter().filter_map(|x| x["id"].as_str().map(String::from)).collect()
         };
+        h.hide_home_over(&dir);
         h.request("ui.set", json!({"leftPanel": true}), t);
         h.request("engine.execute", json!({"command": "library.browse", "params": {"path": path}}), t);
         h.settle(SETTLE);
         assert!(ids(&mut h).contains(&format!("source:local:{path}")));
-        assert!(!ids(&mut h).iter().any(|i| i == "source:local:restoreHidden"));
+        // (the row is there from the start only where the home folder had to be hidden)
+        let hidden_before = !h.app.ui.hidden_locations.is_empty();
+        assert_eq!(ids(&mut h).iter().any(|i| i == "source:local:restoreHidden"), hidden_before);
         let r = h.request("engine.execute", json!({"command": "local.hide", "params": {"path": path}}), t);
         assert_eq!(r["ok"], true, "{r}");
         h.settle(SETTLE);
@@ -840,6 +856,8 @@ mod tests {
         assert_eq!(h.request("ui.clickWidget", json!({"id": "source:local:restoreHidden"}), t)["ok"], true);
         h.settle(SETTLE);
         assert!(h.app.ui.hidden_locations.is_empty());
+        h.hide_home_over(&dir);
+        h.settle(SETTLE);
         assert!(ids(&mut h).contains(&format!("source:local:{path}")));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -856,14 +874,15 @@ mod tests {
         for d in ["Photos/2026/20260101", "Photos/2026/20260114", "Other"] {
             std::fs::create_dir_all(base.join(d)).unwrap();
         }
-        let s = |p: std::path::PathBuf| p.to_string_lossy().to_string();
-        let (photos, day1, day2, other) =
-            (s(base.join("Photos")), s(base.join("Photos/2026/20260101")), s(base.join("Photos/2026/20260114")), s(base.join("Other")));
+        // spelled with the platform's separator, like the paths the folder tree lists
+        let s = |parts: &[&str]| parts.iter().fold(base.clone(), |p, x| p.join(x)).to_string_lossy().to_string();
+        let (photos, day1, day2, other) = (s(&["Photos"]), s(&["Photos", "2026", "20260101"]), s(&["Photos", "2026", "20260114"]), s(&["Other"]));
         let exec = |h: &mut Headless, c: &str, p: Value| h.request("engine.execute", json!({"command": c, "params": p}), t);
         let rects = |h: &mut Headless| -> std::collections::HashMap<String, f64> {
             let w = h.request("ui.widgets", json!({"filter": "lc-ui-roots-"}), t);
             w["result"].as_array().unwrap().iter().map(|x| (x["id"].as_str().unwrap().to_string(), x["rect"][0].as_f64().unwrap_or(0.0))).collect()
         };
+        h.hide_home_over(&base);
         h.request("ui.set", json!({"leftPanel": true}), t);
         assert_eq!(exec(&mut h, "local.addRoot", json!({"path": photos}))["ok"], true);
         assert_eq!(exec(&mut h, "local.addRoot", json!({"path": format!("{photos}/")}))["result"]["roots"].as_array().map(Vec::len), Some(1));
